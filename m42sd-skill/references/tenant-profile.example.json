@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "state_group": null,
+  "states": {
+    "new": null,
+    "assigned": "<live-value>",
+    "in_progress": "<live-value>",
+    "paused": null,
+    "planned": null,
+    "solved": null,
+    "closed": "<live-value>"
+  },
+  "urgency": {
+    "low": "<live-value>",
+    "medium": "<live-value>",
+    "high": "<live-value>"
+  },
+  "urgency_default": "<low|medium|high>",
+  "impact_default": "<live-value>",
+  "close_reasons": {
+    "<operator-alias>": "<live-value>"
+  },
+  "journal_actions": {
+    "forward_user": null,
+    "forward_role": null,
+    "processed": null,
+    "pause": null,
+    "takeover": null,
+    "close": null,
+    "reopen": null,
+    "resume": null,
+    "close_task": null,
+    "solved": null
+  },
+  "ticket_prefixes": {
+    "<LIVE_PREFIX>": "<incident|service_request|ticket|task|problem>",
+    "<UNSUPPORTED_PREFIX>": null
+  },
+  "roles": {
+    "<operator-alias>": {
+      "id": "<live-role-guid>",
+      "name": "<live-role-name>"
+    }
+  },
+  "role_assignment_attribute": "<RecipientRole|Recipient|null>",
+  "portal_url_template": "https://helpdesk.example.com/portal/{ticket_number}",
+  "behavior": {
+    "auto_recipient_states": [],
+    "auto_recipient_on_close": [],
+    "auto_recipient_on_reopen": false,
+    "forward_state": null,
+    "forward_preserve_states": [],
+    "reopen_state": "<configured-state-semantic>",
+    "default_comment_visibility": "<portal|internal>",
+    "preclose_state_by_family": {
+      "incident": null,
+      "service_request": null,
+      "ticket": null,
+      "task": null,
+      "problem": null
+    },
+    "processed_journal_families": [],
+    "state_close_fallback_families": [],
+    "comment_language_mode": "<initiator|operator|bilingual>",
+    "operator_language": null,
+    "close_questions": []
+  }
+}

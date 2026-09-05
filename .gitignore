@@ -1,0 +1,10 @@
+.DS_Store
+.agents
+.codex
+.claude
+__pycache__/
+*.pyc
+work
+
+# Skill runtime secrets and tenant discovery output
+m42_config.json

@@ -1,0 +1,6 @@
+m42_config.json
+__pycache__/
+*.pyc
+work
+.codex
+.agents
