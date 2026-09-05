@@ -1,5 +1,8 @@
 # synit.io - Agent Skill Collection
 
+[![skills.sh](https://skills.sh/b/synit-io/skills)](https://skills.sh/synit-io/skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A collection of agent skills created and maintained by [synit.io](https://synit.io).
 Each skill packages instructions, scripts, and reference material that let an AI
 agent operate a specific tool or service safely and predictably.
@@ -41,8 +44,9 @@ each other; install only the ones you need.
 
 Every skills-compatible agent scans one or more directories for
 `<skill-name>/SKILL.md`. Installing a skill means placing (or symlinking) the
-skill folder into such a directory. The steps below assume you cloned this
-repository first:
+skill folder into such a directory. You can let the `skills` CLI do that for
+you (next section) or do it by hand (the sections after). The manual steps
+assume you cloned this repository first:
 
 ```bash
 git clone https://github.com/synit-io/skills.git
@@ -56,6 +60,37 @@ inside your clone. It is gitignored.
 
 After installing, open the skill's `SKILL.md` and follow its setup section
 (credentials, tenant discovery, safety rules) before the first real task.
+
+### Quick install with the skills CLI
+
+The fastest route on any supported harness is the open-source
+[`skills` CLI](https://github.com/vercel-labs/skills) behind
+[skills.sh](https://skills.sh/synit-io/skills). It detects the agents installed
+on your machine and copies the skill into the right directory for each.
+
+Install every skill in this repository into the current project:
+
+```bash
+npx skills add synit-io/skills
+```
+
+Install one skill, for your user account, for specific agents:
+
+```bash
+npx skills add synit-io/skills --skill m42sd-skill -g -a claude-code -a codex -a opencode
+```
+
+List what the CLI would install without installing:
+
+```bash
+npx skills add synit-io/skills --list
+```
+
+The CLI copies files rather than symlinking. Re-run the same command to pull a
+newer version. Skill config such as `m42_config.json` is written inside the
+installed copy, so back it up before reinstalling if you do not want to run
+setup again. The CLI sends anonymous install telemetry to skills.sh; set
+`DISABLE_TELEMETRY=1` to opt out.
 
 ### Where each harness looks
 
@@ -156,6 +191,8 @@ git pull
 ```
 
 Symlinked installs update immediately. Copied installs need the copy step again.
+Installs made with the `skills` CLI update by re-running the same
+`npx skills add` command.
 
 ## Security
 
