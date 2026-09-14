@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "languages": [
+    {
+      "code": "af",
+      "name": "Afrikaans",
+      "aliases": [],
+      "enabled": true
+    },
+    {
+      "code": "ar",
+      "name": "Arabic",
+      "aliases": ["العربية"],
+      "enabled": true
+    },
+    {
+      "code": "bg",
+      "name": "Bulgarian",
+      "aliases": ["български"],
+      "enabled": true
+    },
+    {
+      "code": "zh",
+      "name": "Chinese (simplified)",
+      "aliases": ["Simplified Chinese", "Chinese simplified", "zh-Hans", "zh-CN", "简体中文"],
+      "enabled": true
+    },
+    {
+      "code": "zh-Hant",
+      "name": "Chinese (traditional)",
+      "aliases": ["Traditional Chinese", "Chinese traditional", "zh-TW", "繁體中文"],
+      "enabled": true
+    },
+    {
+      "code": "hr",
+      "name": "Croatian",
+      "aliases": ["hrvatski"],
+      "enabled": true
+    },
+    {
+      "code": "cs",
+      "name": "Czech",
+      "aliases": ["čeština"],
+      "enabled": true
+    },
+    {
+      "code": "da",
+      "name": "Danish",
+      "aliases": ["dansk"],
+      "enabled": true
+    },
+    {
+      "code": "nl",
+      "name": "Dutch",
+      "aliases": ["Nederlands"],
+      "enabled": true
+    },
+    {
+      "code": "en",
+      "name": "English",
+      "aliases": ["Englisch"],
+      "enabled": true
+    },
+    {
+      "code": "fil",
+      "name": "Filipino",
+      "aliases": ["Tagalog", "tl"],
+      "enabled": true
+    },
+    {
+      "code": "fi",
+      "name": "Finnish",
+      "aliases": ["suomi"],
+      "enabled": true
+    },
+    {
+      "code": "fr",
+      "name": "French",
+      "aliases": ["Français", "francais", "Französisch"],
+      "enabled": true
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "aliases": ["Deutsch"],
+      "enabled": true
+    },
+    {
+      "code": "el",
+      "name": "Greek",
+      "aliases": ["Ελληνικά"],
+      "enabled": true
+    },
+    {
+      "code": "hi",
+      "name": "Hindi",
+      "aliases": ["हिन्दी"],
+      "enabled": true
+    },
+    {
+      "code": "hu",
+      "name": "Hungarian",
+      "aliases": ["magyar"],
+      "enabled": true
+    },
+    {
+      "code": "id",
+      "name": "Indonesian",
+      "aliases": ["bahasa Indonesia"],
+      "enabled": true
+    },
+    {
+      "code": "ga",
+      "name": "Irish",
+      "aliases": ["Gaeilge"],
+      "enabled": true
+    },
+    {
+      "code": "it",
+      "name": "Italian",
+      "aliases": ["Italiano", "Italienisch"],
+      "enabled": true
+    },
+    {
+      "code": "ja",
+      "name": "Japanese",
+      "aliases": ["日本語", "Japanisch"],
+      "enabled": true
+    },
+    {
+      "code": "ks",
+      "name": "Kashmiri",
+      "aliases": ["کٲشُر"],
+      "enabled": true
+    },
+    {
+      "code": "ko",
+      "name": "Korean",
+      "aliases": ["한국어", "Koreanisch"],
+      "enabled": true
+    },
+    {
+      "code": "no",
+      "name": "Norwegian",
+      "aliases": ["norsk"],
+      "enabled": true
+    },
+    {
+      "code": "fa",
+      "name": "Persian",
+      "aliases": ["Farsi", "فارسی"],
+      "enabled": true
+    },
+    {
+      "code": "pl",
+      "name": "Polish",
+      "aliases": ["Polski", "Polnisch"],
+      "enabled": true
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "aliases": ["Português", "Portugiesisch"],
+      "enabled": true
+    },
+    {
+      "code": "ro",
+      "name": "Romanian",
+      "aliases": ["română"],
+      "enabled": true
+    },
+    {
+      "code": "ru",
+      "name": "Russian",
+      "aliases": ["Русский", "Russisch"],
+      "enabled": true
+    },
+    {
+      "code": "sr",
+      "name": "Serbian",
+      "aliases": ["српски"],
+      "enabled": true
+    },
+    {
+      "code": "sk",
+      "name": "Slovak",
+      "aliases": ["slovenčina"],
+      "enabled": true
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "aliases": ["Español", "Spanisch"],
+      "enabled": true
+    },
+    {
+      "code": "sv",
+      "name": "Swedish",
+      "aliases": ["svenska"],
+      "enabled": true
+    },
+    {
+      "code": "th",
+      "name": "Thai",
+      "aliases": ["ไทย"],
+      "enabled": true
+    },
+    {
+      "code": "tr",
+      "name": "Turkish",
+      "aliases": ["Türkçe"],
+      "enabled": true
+    },
+    {
+      "code": "uk",
+      "name": "Ukrainian",
+      "aliases": ["українська"],
+      "enabled": true
+    },
+    {
+      "code": "vi",
+      "name": "Vietnamese",
+      "aliases": ["Tiếng Việt"],
+      "enabled": true
+    }
+  ]
+}

@@ -29,6 +29,7 @@ Each top-level directory is one skill. A skill follows the open
   scripts/        # CLI tooling the agent runs
   references/     # API notes, config templates, background material
   tests/          # regression tests for the scripts
+  agents/         # optional harness metadata, e.g. openai.yaml for Codex
 ```
 
 Skills cover different use cases, tools, and services. They are independent of
@@ -39,6 +40,7 @@ each other; install only the ones you need.
 | Skill | Description |
 | --- | --- |
 | [m42sd-skill](m42sd-skill/) | Operate Matrix42 Enterprise Service Management through the m42Services API: ticket, journal, user, knowledge-base, and service-catalog workflows for helpdesk agents. Includes a stateless Python CLI, guided tenant setup, and safety rules for mutations such as closing or forwarding tickets. |
+| [nexthink-campaign-translator](nexthink-campaign-translator/) | Add languages to a Nexthink campaign export JSON. The agent translates question and choice text; a Python helper writes the translation overlays, keeps question IDs, `{{placeholders}}`, `href` values, and rich HTML intact, updates `multiLanguageInfo`, and repairs `INVALID` overlays. Supported languages come from a configurable allowlist. |
 
 ## Installation
 
@@ -196,10 +198,12 @@ Installs made with the `skills` CLI update by re-running the same
 
 ## Security
 
-Skill scripts store credentials in local config files that are excluded from
-version control. Never commit tokens, tenant profiles, or discovery output, and
-never install a skill into a directory that is committed to a public repository
-together with its generated config.
+Skill scripts that need credentials store them in local config files that are
+excluded from version control. Never commit tokens, tenant profiles, or
+discovery output, and never install a skill into a directory that is committed
+to a public repository together with its generated config. The same applies to
+customer data such as campaign exports and translation bundles: keep them out
+of the repository.
 
 ## Contributing
 

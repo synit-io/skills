@@ -1,0 +1,36 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging and build output
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test, type-checking, and coverage output
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Temporary and editor files
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*.log
+*.bak
+*~
+.DS_Store
+*:Zone.Identifier

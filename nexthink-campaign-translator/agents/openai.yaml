@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nexthink Campaign Translator"
+  short_description: "Add localized text to campaign export JSON"
+  default_prompt: "Use $nexthink-campaign-translator to add requested languages to a Nexthink campaign export."
