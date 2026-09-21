@@ -8,3 +8,6 @@ work
 
 # Skill runtime secrets and tenant discovery output
 m42_config.json
+
+# Docker Agent official-source cache snapshot
+docker-agent-builder/references/llms.txt

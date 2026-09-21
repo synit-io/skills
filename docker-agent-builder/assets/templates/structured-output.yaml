@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
+
+version: "16"
+
+agents:
+  root:
+    model: openai/gpt-5-mini
+    description: Extractor that returns a predictable JSON object
+    instruction: |
+      Extract the requested fields from the user's input. Return only data that conforms
+      to the configured response schema. Use null only when the schema permits it.
+    toolsets:
+      - type: think
+    structured_output:
+      name: extraction_result
+      description: Structured extraction result
+      strict: true
+      schema:
+        type: object
+        properties:
+          summary:
+            type: string
+          confidence:
+            type: number
+        required:
+          - summary
+          - confidence
+        additionalProperties: false

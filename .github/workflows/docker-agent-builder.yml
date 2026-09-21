@@ -1,0 +1,74 @@
+name: docker-agent-builder
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docker-agent-builder/**"
+      - ".github/workflows/docker-agent-builder.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docker-agent-builder/**"
+      - ".github/workflows/docker-agent-builder.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docker-agent-builder
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docker-agent-builder/scripts/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r scripts/requirements.txt
+      - name: Verify skill metadata
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          from ruamel.yaml import YAML
+
+          skill = Path("SKILL.md").read_text(encoding="utf-8")
+          if not skill.startswith("---\n") or "\n---\n" not in skill[4:]:
+              raise SystemExit("SKILL.md must start with YAML front matter")
+
+          front_matter = skill.split("---\n", 2)[1]
+          metadata = YAML(typ="safe").load(front_matter)
+          if metadata.get("name") != "docker-agent-builder":
+              raise SystemExit("SKILL.md name must be docker-agent-builder")
+          if not metadata.get("description"):
+              raise SystemExit("SKILL.md description is required")
+
+          agent = YAML(typ="safe").load(
+              Path("agents/openai.yaml").read_text(encoding="utf-8")
+          )
+          interface = agent.get("interface", {})
+          for key in ("display_name", "short_description"):
+              if not interface.get(key):
+                  raise SystemExit(f"agents/openai.yaml interface.{key} is required")
+          PY
+      - name: Check Python syntax
+        run: |
+          python -m compileall -q scripts
+          python scripts/validate_agent_yaml.py --help >/dev/null
+          python scripts/refresh_official_sources.py --help >/dev/null
+      - name: Run validator tests
+        run: python scripts/test_validator.py
+      - name: Validate templates with official schema
+        run: |
+          set -euo pipefail
+          for file in assets/templates/*.yaml; do
+            python scripts/validate_agent_yaml.py "$file" \
+              --schema-mode official \
+              --docker-check off \
+              --cache-dir "$RUNNER_TEMP/docker-agent-builder-cache"
+          done

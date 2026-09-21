@@ -1,0 +1,3 @@
+interface:
+  display_name: "Docker Agent Builder"
+  short_description: "Create and validate Docker Agent configurations"

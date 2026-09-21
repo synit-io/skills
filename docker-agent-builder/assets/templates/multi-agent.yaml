@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
+
+version: "16"
+
+models:
+  primary:
+    provider: openai
+    model: gpt-5-mini
+    temperature: 0.2
+
+agents:
+  root:
+    model: primary
+    description: Coordinator that delegates research and review
+    instruction: |
+      Break the request into clear tasks. Delegate evidence gathering to the
+      researcher and quality checks to the reviewer. Synthesize the final answer.
+    sub_agents:
+      - researcher
+      - reviewer
+    toolsets:
+      - type: think
+      - type: todo
+
+  researcher:
+    model: primary
+    description: Research specialist that gathers verifiable evidence
+    instruction: |
+      Investigate the assigned question, record sources, and return concise findings.
+    toolsets:
+      - type: fetch
+      - type: think
+
+  reviewer:
+    model: primary
+    description: Reviewer that checks correctness, completeness, and consistency
+    instruction: |
+      Review the proposed result, identify unsupported claims or defects, and suggest fixes.
+    toolsets:
+      - type: think

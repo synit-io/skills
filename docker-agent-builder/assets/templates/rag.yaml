@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
+
+version: "16"
+
+rag:
+  project_docs:
+    tool:
+      description: Search the project's local documentation
+    docs:
+      - ./docs
+    strategies:
+      - type: bm25
+
+agents:
+  root:
+    model: openai/gpt-5-mini
+    description: Documentation assistant grounded in local project files
+    instruction: |
+      Search the project documentation before answering. Cite the relevant file paths
+      and distinguish retrieved facts from your own inference.
+    toolsets:
+      - type: rag
+        ref: project_docs
+      - type: think

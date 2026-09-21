@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
+
+version: "16"
+
+mcps:
+  docs:
+    ref: docker:context7
+
+  github:
+    ref: docker:github-official
+    tools:
+      - get_file_contents
+      - search_repositories
+      - list_issues
+
+    env:
+      GITHUB_PERSONAL_ACCESS_TOKEN: "${env.GITHUB_PERSONAL_ACCESS_TOKEN}"
+agents:
+  root:
+    model: openai/gpt-5-mini
+    description: Repository assistant grounded in documentation and GitHub state
+    instruction: |
+      Research the documentation and repository before proposing changes.
+      Never expose credentials or make destructive changes without approval.
+    toolsets:
+      - type: think
+      - type: mcp
+        ref: docs
+      - type: mcp
+        ref: github

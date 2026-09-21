@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/docker-agent-builder/core-schema.json",
+  "title": "Docker Agent Core Diagnostic Schema",
+  "description": "Conservative offline diagnostic subset of Docker Agent configuration v16. This is not the official schema and must not be used for final validation.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
+    },
+    "metadata": {"type": "object"},
+    "providers": {
+      "type": "object",
+      "additionalProperties": {"type": "object"}
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/model"}
+    },
+    "mcps": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/mcpDefinition"}
+    },
+    "rag": {
+      "type": "object",
+      "additionalProperties": {"type": "object"}
+    },
+    "commands": {"type": "object"},
+    "skills": {"type": "object"},
+    "toolsets": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/definitions/toolset"}
+    },
+    "permissions": {"type": "object"},
+    "runtime": {"type": "object"},
+    "budget": {"type": "object"},
+    "budgets": {
+      "type": "object",
+      "additionalProperties": {"type": "object"}
+    },
+    "flavors": {
+      "type": "object",
+      "additionalProperties": {"type": ["object", "null"]}
+    },
+    "agents": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/definitions/agent"}
+    }
+  },
+  "required": ["version", "agents"],
+  "additionalProperties": false,
+  "definitions": {
+    "model": {
+      "type": "object",
+      "properties": {
+        "provider": {"type": "string"},
+        "model": {"type": "string"},
+        "description": {"type": "string"},
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+        "max_tokens": {"type": "integer", "minimum": 1},
+        "top_p": {"type": "number", "minimum": 0, "maximum": 1},
+        "base_url": {"type": "string"},
+        "token_key": {"type": "string"},
+        "first_available": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        },
+        "routing": {"type": "array"},
+        "fallback": {"type": "object"},
+        "provider_opts": {"type": "object"}
+      },
+      "additionalProperties": true,
+      "anyOf": [
+        {"required": ["first_available"]},
+        {"required": ["provider", "model"]}
+      ]
+    },
+    "mcpDefinition": {
+      "type": "object",
+      "properties": {
+        "ref": {"type": "string"},
+        "command": {"type": "string"},
+        "remote": {"type": "object"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "tools": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true,
+      "anyOf": [
+        {"required": ["ref"]},
+        {"required": ["command"]},
+        {"required": ["remote"]}
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "model": {"type": "string"},
+        "description": {"type": "string", "minLength": 1},
+        "instruction": {"type": "string"},
+        "instruction_file": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ]
+        },
+        "harness": {"type": "object"},
+        "sub_agents": {"type": "array", "items": {"type": "string"}},
+        "handoffs": {"type": "array", "items": {"type": "string"}},
+        "force_handoff": {"type": "string"},
+        "toolsets": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/toolset"}
+        },
+        "use_toolsets": {"type": "array", "items": {"type": "string"}},
+        "use_commands": {"type": "array", "items": {"type": "string"}},
+        "use_skills": {"type": "array", "items": {"type": "string"}},
+        "budgets": {"type": "array", "items": {"type": "string"}},
+        "structured_output": {"type": "object"}
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "not": {
+            "required": ["instruction", "instruction_file"]
+          }
+        },
+        {
+          "anyOf": [
+            {"required": ["model"]},
+            {"required": ["harness"]}
+          ]
+        }
+      ]
+    },
+    "toolset": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "mcp", "mcp_catalog", "script", "think", "memory", "filesystem", "file",
+            "shell", "background_jobs", "tasks", "plan", "session_plan",
+            "session_context", "todo", "fetch", "api", "a2a", "lsp",
+            "user_prompt", "openapi", "open_url", "model_picker",
+            "background_agents", "scheduler", "rag", "git", "webhook"
+          ]
+        },
+        "ref": {"type": "string"},
+        "command": {"type": "string"},
+        "remote": {"type": "object"},
+        "url": {"type": "string"},
+        "api_config": {"type": "object"},
+        "webhook_config": {"type": "object"},
+        "rag_config": {"type": "object"},
+        "models": {"type": "array", "items": {"type": "string"}},
+        "shell": {"type": "object"}
+      },
+      "required": ["type"],
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "mcp"}}},
+          "then": {
+            "anyOf": [
+              {"required": ["ref"]},
+              {"required": ["command"]},
+              {"required": ["remote"]}
+            ]
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "lsp"}}},
+          "then": {"required": ["command"]}
+        },
+        {
+          "if": {"properties": {"type": {"const": "api"}}},
+          "then": {"required": ["api_config"]}
+        },
+        {
+          "if": {"properties": {"type": {"const": "webhook"}}},
+          "then": {"required": ["webhook_config"]}
+        },
+        {
+          "if": {"properties": {"type": {"enum": ["a2a", "openapi", "open_url"]}}},
+          "then": {"required": ["url"]}
+        },
+        {
+          "if": {"properties": {"type": {"const": "model_picker"}}},
+          "then": {"required": ["models"]}
+        },
+        {
+          "if": {"properties": {"type": {"const": "script"}}},
+          "then": {"required": ["shell"]}
+        }
+      ]
+    }
+  }
+}

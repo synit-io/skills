@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
+
+version: "16"
+
+agents:
+  root:
+    model: openai/gpt-5-mini
+    description: A focused general-purpose assistant
+    instruction: |
+      Help the user complete the requested task accurately.
+      State assumptions and keep the response concise.
+    toolsets:
+      - type: think
