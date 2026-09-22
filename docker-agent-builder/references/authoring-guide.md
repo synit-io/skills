@@ -23,12 +23,11 @@ The main documentation tracks the repository's `main` branch and may be ahead of
 
 ## 2. Canonical document shape
 
-Use only required sections and keep this order:
+This is the single definition of the top-level section order (the validator's `TOP_LEVEL_ORDER`). Use only required sections and keep this order:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
 version: "16"
-
 metadata: {}
 providers: {}
 models: {}
@@ -45,7 +44,7 @@ flavors: {}
 agents: {}
 ```
 
-`agents` is required and must contain at least one agent. The current official schema determines the latest accepted version; `16` is the bundled snapshot value, not a permanent constant.
+`agents` is required and must contain at least one agent. The current official schema determines the latest accepted version; `python3 scripts/validate_agent_yaml.py --schema-info` prints it. The examples in this guide use the bundled snapshot value, which is not a permanent constant.
 
 Minimal pattern:
 
@@ -127,7 +126,7 @@ Docker Agent also accepts a bare primary model name such as `gpt-4` or `claude`,
 
 ## 5. Toolsets
 
-Current main-branch schema toolset types include:
+This list is the documented copy of the validator's bundled `TOOLSET_TYPES` fallback; the loaded official schema takes precedence at validation time. Current main-branch schema toolset types include:
 
 ```text
 mcp, mcp_catalog, script, think, memory, filesystem, file, shell,
@@ -256,7 +255,9 @@ Top-level `budget` applies run-wide ceilings. Named top-level `budgets` are shar
 
 ## 10. Environment variables and secrets
 
-Canonical interpolation:
+This section is the single definition of the secrets rules; SKILL.md and README.md point here.
+
+Never place a secret value in the YAML: no API keys, access tokens, passwords, private keys, connection strings with passwords, or `--token=value` command arguments. Use `${env.NAME}` interpolation for ordinary configuration values, optionally prefixed by an authentication scheme:
 
 ```yaml
 env:
@@ -265,24 +266,36 @@ headers:
   Authorization: "Bearer ${env.SERVICE_TOKEN}"
 ```
 
-Never write real secret values. Avoid example strings that look like live keys. Document required variable names separately.
+For a provider `token_key`, write the environment variable name itself rather than an interpolation:
+
+```yaml
+providers:
+  internal:
+    provider: openai
+    base_url: "${env.INTERNAL_LLM_BASE_URL}"
+    token_key: INTERNAL_LLM_API_KEY
+```
+
+Avoid example strings that look like live keys; the security gate flags known credential shapes anywhere in the file (see `validation-contract.md`). Document required variable names separately and never print secret values in delivery notes.
 
 Common provider defaults include environment variables such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `GOOGLE_API_KEY`, but confirm the selected provider's official documentation.
 
+Treat shell execution, filesystem writes, webhooks, API tools, remote MCP servers, and broad autonomous permissions as privileged capabilities. Grant only what the requested workflow needs, and constrain `filesystem` and `file` tools with `allow_list` unless broad host access is explicitly required (section 5).
+
 ## 11. Formatting and validation
 
-Formatting rules:
+This section is the single definition of the formatting rules that `validate_agent_yaml.py --fix` enforces; other documents link here.
 
-- two spaces per mapping level;
-- block-style sequences, not flow arrays, in final output;
-- `|` block scalars for multi-line instructions;
-- quote values containing `${...}`, colons that could be ambiguous, or version numbers that the schema declares as strings;
-- no YAML anchors or aliases;
-- no duplicate keys;
-- no tabs or trailing spaces;
-- LF line endings and one final newline.
+- Official schema comment on the first non-empty line: `# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json`.
+- Top-level sections in the order of section 2; agent, model, and toolset fields in the validator's canonical order (`--fix` applies it and keeps comments next to their keys).
+- Two spaces per mapping level; sequences indented under their key.
+- Block style everywhere in final output; no flow mappings or arrays.
+- `|` block scalars for multi-line instructions.
+- Quote values containing `${...}`, ambiguous colons, and the `version` value (the schema declares it as a string).
+- No YAML anchors, aliases, or duplicate keys.
+- No tabs or trailing whitespace outside scalar content; LF line endings; one final newline. Whitespace inside a block scalar is content and is preserved.
 
-Run the bundled validator with the official schema. The validator also checks local references, type-specific tool requirements, obvious embedded secrets, formatting, and optional Docker Agent dry-run.
+Run the bundled validator with the official schema after every change. The gates it applies, how to read its result, and its exit codes are defined in `validation-contract.md`.
 
 ## 12. Common failure modes
 

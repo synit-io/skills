@@ -1,0 +1,10 @@
+# Official-source caches written by scripts/refresh_official_sources.py --vendor-dir
+# (agent-schema.json, agent-schema.meta.json, llms.txt, llms.meta.json).
+# references/core-schema.json is skill-authored and stays under version control.
+references/llms.txt
+references/agent-schema.json
+references/*.meta.json
+
+# Python bytecode
+__pycache__/
+*.pyc

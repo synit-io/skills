@@ -25,17 +25,14 @@ The skill is not intended for ordinary Dockerfiles or Docker Compose files unles
 
 ## Key capabilities
 
-- Uses Docker's current official `agent-schema.json` for final schema validation.
-- Fetches and caches official source material while retaining a conservative offline diagnostic schema.
-- Adds the official YAML language-server schema comment to new files.
-- Produces clean block-style YAML with two-space indentation, canonical section ordering, LF line endings, no tabs, no anchors, no duplicate keys, no trailing whitespace, and one final newline.
-- Detects unknown or broken local references across agents, models, MCPs, RAG sources, toolsets, commands, skills, and budgets.
+- Uses Docker's current official `agent-schema.json` for final schema validation, with a local cache that is reused for 24 hours and refreshed automatically afterwards.
+- Retains a conservative offline diagnostic schema for work without network access.
+- Formats files into the canonical shape defined in `references/authoring-guide.md` (section 11) and rewrites a file only when the rewrite verifiably preserves every value; comments stay next to their keys.
+- Detects unknown or broken local references across agents, models, MCPs, RAG sources, toolsets, commands, skills, and budgets, and suggests the closest name for a mistyped model.
 - Verifies that `instruction_file` paths exist and remain inside the configuration directory after symlink resolution.
-- Detects self-referencing or cyclic `force_handoff` chains.
-- Checks type-specific toolset requirements.
-- Scans for obvious embedded credentials and private keys.
-- Verifies cached official-schema source metadata and SHA-256 integrity.
-- Preserves comments and scalar styles where possible when repairing existing YAML.
+- Detects self-referencing or cyclic `force_handoff` chains and type-specific toolset requirements.
+- Scans for embedded credentials (known token shapes, private keys, passwords in URLs, sensitive command-line flags) without ever printing the value.
+- Detects corruption of the cached official schema through recorded SHA-256 digests (see "Official sources").
 - Optionally runs `docker agent run --dry-run` or `docker-agent run --dry-run` as a runtime gate.
 - Includes ready-to-adapt templates for common configurations.
 
@@ -45,13 +42,16 @@ The skill is not intended for ordinary Dockerfiles or Docker Compose files unles
 docker-agent-builder/
 ├── README.md
 ├── SKILL.md
+├── .gitignore
 ├── agents/
 │   └── openai.yaml
 ├── scripts/
 │   ├── validate_agent_yaml.py
 │   ├── refresh_official_sources.py
-│   ├── test_validator.py
+│   ├── _sources.py
 │   └── requirements.txt
+├── tests/
+│   └── test_validator.py
 ├── references/
 │   ├── authoring-guide.md
 │   ├── validation-contract.md
@@ -84,24 +84,16 @@ For a manual local Codex installation, copy or symlink this directory to `~/.age
 $docker-agent-builder review this agent.yaml
 ```
 
-The skill's validator requires Python 3.10 or newer and these packages:
-
-```text
-jsonschema>=4.22,<5
-ruamel.yaml>=0.18,<0.19
-```
-
-For direct local use, install them from the skill root:
+The validator requires Python 3.10 or newer and the packages in `scripts/requirements.txt` (`jsonschema[format-nongpl]` and `ruamel.yaml`; the `format-nongpl` extra provides the URI format checks, and the validator warns when they are unavailable). Install them from the skill root, preferably in a virtual environment:
 
 ```bash
+python3 -m venv .venv && . .venv/bin/activate
 python3 -m pip install -r scripts/requirements.txt
 ```
 
-Commands in this README use `python3` on Unix and macOS. On Windows, use `py -3`.
+Commands in this README use `python3` on Unix and macOS. On Windows, use `py -3`. `refresh_official_sources.py` needs only the standard library.
 
 The Docker Agent CLI is optional for static validation but required for the runtime dry-run gate.
-
-Official-source downloads use Python's verified TLS stack. If that stack lacks a usable CA store, the scripts fall back to verified `curl`; they never disable certificate verification.
 
 ## Using the skill
 
@@ -152,7 +144,21 @@ python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
   --docker-check auto
 ```
 
-`--fix` rewrites the target file in place using the canonical formatter. The command must exit with status `0` before the YAML is described as validated.
+`--fix` rewrites the target file in place using the canonical formatter, atomically and only after verifying that the rewritten text parses to the same values (the one intended change is quoting `version`). The command must exit with status `0` before the YAML is described as validated.
+
+`--docker-check auto` (the default) and `--docker-check required` execute the Docker Agent CLI against the file (`docker agent run ./agent.yaml --dry-run`). Treat that as running the file: for files you do not trust, use `--docker-check off`.
+
+### Review a file without touching it
+
+```bash
+python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
+  --schema-mode official \
+  --docker-check off \
+  --allow-legacy-version \
+  --json
+```
+
+`--allow-legacy-version` reports a `version` that differs from the schema's latest as a warning instead of an error, so a review never has to bump the version to obtain a pass.
 
 ### Inspect the current official schema
 
@@ -160,7 +166,7 @@ python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
 python3 scripts/validate_agent_yaml.py --schema-info
 ```
 
-This reports the schema source, SHA-256 digest, and latest configuration version detected by the validator.
+This reports the schema source, SHA-256 digest, and latest configuration version detected by the validator. It needs no third-party packages.
 
 ### Require Docker Agent runtime validation
 
@@ -201,14 +207,12 @@ python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
   --offline
 ```
 
-Offline official validation succeeds only when a valid official schema has already been cached. The default cache directory is `~/.cache/docker-agent-builder`.
-
-### Emit a machine-readable report
+Offline official validation succeeds only when a valid official schema has already been cached. The default cache directory is `~/.cache/docker-agent-builder`. To pre-populate a cache once (for example in CI) and validate from it:
 
 ```bash
+python3 scripts/refresh_official_sources.py --schema-only --cache-dir /path/to/cache
 python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
-  --schema-mode official \
-  --json
+  --schema-mode official --offline --docker-check off --cache-dir /path/to/cache
 ```
 
 ### Run the diagnostic core schema
@@ -222,90 +226,34 @@ python3 scripts/validate_agent_yaml.py path/to/agent.yaml \
 
 The bundled core schema is intentionally conservative and incomplete. A passing core-schema result is useful for diagnostics and tests, but it is not sufficient for a final validity claim.
 
+### All flags
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--fix` | off | Rewrite the file into canonical format before validating; written only when values are verifiably preserved. |
+| `--schema-mode {official,core}` | `official` | Official schema (required for a validity claim) or bundled diagnostic core schema. |
+| `--schema PATH` | – | Validate against an explicit schema file; reported as `explicit`. |
+| `--cache-dir PATH` | `~/.cache/docker-agent-builder` | Where the official schema cache lives. A cache inside the validated file's directory tree is reported as `official (untrusted cache)`. |
+| `--offline` | off | Never download; require a valid cached official schema. |
+| `--refresh-schema` | off | Require a fresh download; fail (exit 2) instead of falling back to the cache. |
+| `--max-age HOURS` | `24` | Reuse the cached schema while it is younger than this; `0` always downloads. |
+| `--schema-timeout SECONDS` | `30` | Download timeout for the official schema. |
+| `--schema-info` | off | Print schema source, digest, and latest config version, then exit. |
+| `--allow-legacy-version` | off | Report a `version` that differs from the schema's latest as a warning instead of an error. |
+| `--docker-check {auto,required,off}` | `auto` | Run the Docker Agent dry-run when the CLI is found, require it, or skip it. `auto` and `required` execute the CLI against the file. |
+| `--docker-timeout SECONDS` | `90` | Dry-run timeout. |
+| `--runtime-env-policy {warn,error}` | `warn` | Treat a dry-run failure caused only by missing credentials or environment variables as a warning or an error. |
+| `--json` | off | Emit a machine-readable report (also used for INCOMPLETE errors). |
+
 ## Validation model
 
-A file is accepted only after the applicable gates complete:
+The gates, result states (PASS, PASS WITH WARNINGS, FAIL, INCOMPLETE), and exit codes (`0`, `1`, `2`) are defined in `references/validation-contract.md`. In short: YAML parse, clean format, official schema, semantic references, security, and an optional runtime dry-run must all pass for exit code `0`; `1` means the file is invalid or unsafe; `2` means validation could not be completed.
 
-1. **YAML parse gate** - Reject malformed YAML, duplicate keys, invalid tabs, and non-mapping documents.
-2. **Clean-format gate** - Enforce the schema comment, canonical ordering, block style, clean whitespace, and final newline.
-3. **Official-schema gate** - Validate with Docker's current official JSON Schema using URI format checks. Cached schemas require matching official-source metadata and SHA-256.
-4. **Semantic gate** - Resolve named and local references, validate instruction files, check handoff graphs and tool requirements, and scan for embedded secrets.
-5. **Runtime gate when available** - Run Docker Agent in dry-run mode and distinguish configuration failures from missing credentials or unavailable external dependencies.
+Findings never echo values from the file: duplicate keys are reported by key name and line, schema errors by expected type or allowed values, and secret findings by path and pattern name.
 
-Possible result states are:
+## Formatting, secrets, and permissions
 
-- **PASS** - Static validation passed and runtime validation passed or was not required.
-- **PASS WITH WARNINGS** - Static validation passed, but runtime verification was unavailable or an external environment dependency was missing.
-- **FAIL** - At least one YAML, formatting, schema, semantic, security, or non-environment runtime error exists.
-- **INCOMPLETE** - Required official validation could not be completed, usually because neither the upstream schema nor a cached official schema was available.
-
-Validator exit codes:
-
-| Code | Meaning |
-| ---: | --- |
-| `0` | Validation passed; warnings may remain. |
-| `1` | The file is invalid or unsafe. |
-| `2` | Validation could not be completed because a required dependency, tool, or official schema was unavailable. |
-
-## Formatting conventions
-
-New files begin with:
-
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json
-```
-
-When present, top-level sections are ordered as follows:
-
-```text
-version, metadata, providers, models, mcps, rag, commands, skills,
-toolsets, permissions, runtime, budget, budgets, flavors, agents
-```
-
-Additional rules:
-
-- Use two spaces for indentation and block-style YAML.
-- Use `instruction: |` for multi-line agent instructions.
-- Prefer the smallest valid configuration and add only requested capabilities.
-- Prefer explicit `provider/model` values or reusable named models for deterministic behavior.
-- Reuse top-level definitions when several agents share a model, MCP server, RAG source, command group, skill group, toolset, or budget.
-- Use `sub_agents` for delegation, `handoffs` for conversation transfer, and `force_handoff` only for deterministic pipelines.
-- Avoid anchors, aliases, duplicate keys, trailing whitespace, absolute paths, and unnecessary privileged tools.
-
-## Secrets and permissions
-
-Never place secret values directly in generated YAML.
-
-Use environment interpolation for ordinary configuration values:
-
-```yaml
-env:
-  GITHUB_PERSONAL_ACCESS_TOKEN: "${env.GITHUB_PERSONAL_ACCESS_TOKEN}"
-```
-
-For provider `token_key`, use the environment variable name rather than interpolation:
-
-```yaml
-providers:
-  internal:
-    provider: openai
-    base_url: "${env.INTERNAL_LLM_BASE_URL}"
-    token_key: INTERNAL_LLM_API_KEY
-```
-
-Treat shell execution, filesystem writes, webhooks, API tools, remote MCP servers, and broad autonomous permissions as privileged capabilities. Grant only what the requested workflow needs.
-
-Constrain filesystem reads separately from writes:
-
-```yaml
-toolsets:
-  - type: filesystem
-    readonly: true
-    allow_list:
-      - .
-```
-
-`readonly` blocks mutation; `allow_list` confines readable paths. Omitting `allow_list` permits every path reachable by the process. Permissions are client-side approval policy, not a sandbox or security boundary.
+The canonical formatting rules (schema comment, section order, block style, whitespace) are in `references/authoring-guide.md`, section 11; the secrets and least-privilege rules are in section 10 of the same file. The formatter applies the formatting rules; the security gate enforces the secrets rules.
 
 ## Templates
 
@@ -322,41 +270,6 @@ The files under `assets/templates/` are starting points, not final configuration
 
 Copy a template, adapt its models, instructions, tools, paths, and permissions, then run full official validation.
 
-## Refreshing official sources
-
-Refresh the official schema and `llms.txt` cache:
-
-```bash
-python3 scripts/refresh_official_sources.py
-```
-
-Useful options:
-
-```bash
-python3 scripts/refresh_official_sources.py --schema-only
-python3 scripts/refresh_official_sources.py --llms-only
-python3 scripts/refresh_official_sources.py --json
-python3 scripts/refresh_official_sources.py --vendor-dir ./audited-snapshot
-```
-
-The refresh script downloads and validates every requested source before replacing cache files. It records source URLs, retrieval times, SHA-256 digests, and the latest schema version it detects. The bundled source manifest documents source precedence and snapshot provenance.
-
-The repository contains no official-source cache. Agents using the skill inspect `agent-schema.meta.json` and `llms.meta.json` in the default `~/.cache/docker-agent-builder` directory. If either entry is missing or older than seven days, they refresh both sources when network access is available. Offline official validation therefore requires a cache created locally by an earlier online run.
-
-## Running the tests
-
-The regression suite checks formatting, schema provenance, source-refresh failure behavior, duplicate-key detection, schema failures, reference and instruction-file validation, secret detection, runtime classification, forced-handoff cycles, structured-output strictness, and every bundled template.
-
-```bash
-python3 scripts/test_validator.py
-```
-
-The tests use the bundled core schema and disable Docker dry-run so they remain deterministic and do not require network access or model credentials. Full acceptance of an actual Docker Agent file still requires official-schema validation.
-
-## Continuous integration
-
-The collection's path-filtered GitHub Actions workflow verifies skill metadata, source-manifest hashes, Python syntax, validator regression tests, and every bundled template against a freshly downloaded official schema. Official schema, `llms.txt`, official-source metadata, bytecode, and cache directories remain outside version control; each installed agent maintains its own local copy.
-
 ## Official sources
 
 The skill uses these upstream sources:
@@ -368,11 +281,41 @@ The skill uses these upstream sources:
 - [Official JSON Schema](https://raw.githubusercontent.com/docker/docker-agent/main/agent-schema.json)
 - [Repository examples](https://github.com/docker/docker-agent/tree/main/examples)
 
-The main-branch documentation and schema can describe features newer than an installed Docker Agent release. For compatibility-sensitive work, the target CLI version and stable documentation take precedence over main-branch examples. The repository contains no documentation-index snapshot; refresh official sources locally before relying on rapidly changing features.
+The main-branch documentation and schema can describe features newer than an installed Docker Agent release. For compatibility-sensitive work, the target CLI version and stable documentation take precedence over main-branch examples.
+
+Refresh the local cache of the official schema and `llms.txt` with:
+
+```bash
+python3 scripts/refresh_official_sources.py
+python3 scripts/refresh_official_sources.py --schema-only   # or --llms-only
+python3 scripts/refresh_official_sources.py --json
+python3 scripts/refresh_official_sources.py --vendor-dir ./audited-snapshot
+```
+
+The refresh policy (what is refreshed when, and by which script) is defined in `references/source-manifest.md`. Downloads are HTTPS-only with verified TLS, refuse redirects to plain HTTP, and are capped at 5 MB; when Python's own trust store is empty the scripts fall back to `curl`, which verifies certificates with its own store. When a refresh yields a different digest than the previous copy, both digests and versions are printed.
+
+Source-cache integrity: each cached file has a `*.meta.json` record with the URL, retrieval time, byte count, and SHA-256 of the downloaded bytes. The validator refuses a cache whose file no longer matches its record. This detects local corruption or edits of the cache; it does not prove that the download was authentic, and any schema that declares the expected title is accepted. Keep the cache directory under your own control and outside the tree of files you validate (the validator flags a cache inside that tree as untrusted).
+
+The repository contains no official-source cache: `references/llms.txt`, `references/agent-schema.json`, `references/*.meta.json`, bytecode, and cache directories are excluded by the `.gitignore` in this directory. Offline official validation therefore requires a cache created locally by an earlier online run or by `refresh_official_sources.py`.
+
+## Running the tests
+
+The regression suite covers formatting and value preservation, comment-preserving reordering, schema-source handling (live fetch, cache reuse, corruption, unwritable cache), download hardening, duplicate-key and schema failures, reference and instruction-file validation, secret detection for every known pattern, runtime classification with a fake Docker Agent CLI, exit codes, documentation consistency, and every bundled template.
+
+```bash
+python3 tests/test_validator.py
+python3 -m unittest discover -s tests   # equivalent
+```
+
+The tests are offline: they use the bundled core schema, mock every download, and replace Docker dry-run with a fake CLI. Full acceptance of an actual Docker Agent file still requires official-schema validation.
+
+## Continuous integration
+
+The collection's path-filtered GitHub Actions workflow verifies skill metadata, source-manifest hashes, Python syntax (`python -m compileall -q scripts tests`), the regression suite (`python tests/test_validator.py`), and every bundled template with `--schema-mode core --docker-check off`. A separate network-dependent job pre-populates a cache with `refresh_official_sources.py --schema-only --cache-dir <dir>` and validates the templates with `--schema-mode official --offline --docker-check off --cache-dir <dir>`.
 
 ## License
 
-This skill uses the [Synit Repository License v1.1](LICENSE), a source-available internal-use license. Bundled upstream Docker material retains its original license and notices.
+This skill is released under the repository's [MIT License](../LICENSE). Bundled upstream Docker material under `references/` retains its original Apache License 2.0 notices; see `references/THIRD_PARTY_NOTICES.md` and `references/docker-agent-LICENSE.txt`.
 
 ## Attribution
 

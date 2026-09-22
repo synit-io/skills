@@ -1,2 +1,2 @@
-jsonschema>=4.22,<5
+jsonschema[format-nongpl]>=4.22,<5
 ruamel.yaml>=0.18,<0.19
