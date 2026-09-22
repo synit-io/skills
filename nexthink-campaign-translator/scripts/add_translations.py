@@ -342,6 +342,9 @@ class _StructureParser(HTMLParser):
         self.events: list[HtmlEvent] = []
         # Raw text between structural events, one string per gap.
         self.text_segments: list[str] = [""]
+        # Markup left open at the end of the input, such as "<img src=x" or
+        # "<!-- x", as the parser saw it.
+        self.unterminated: str | None = None
 
     @staticmethod
     def _attributes(attrs: list[tuple[str, str | None]]) -> HtmlAttributes:
@@ -388,6 +391,15 @@ class _StructureParser(HTMLParser):
 def parse_html(value: str) -> _StructureParser:
     parser = _StructureParser()
     parser.feed(value)
+    # feed() keeps markup that is still open at the end of the input in
+    # rawdata. What close() then does with it depends on the Python version:
+    # older releases emit it as text, newer ones follow the HTML5 end-of-file
+    # rules and drop an open tag or turn "<!-- x" into a comment. Record it
+    # before close() so the validation result is the same everywhere. A lone
+    # "<" or "&T" at the end is plain text and stays out of this.
+    match = TAG_OPENER_PATTERN.search(parser.rawdata)
+    if match:
+        parser.unterminated = parser.rawdata[match.start():]
     parser.close()
     return parser
 
@@ -429,6 +441,12 @@ def validate_html_structure(source_text: str, target_text: str, location: str) -
     """
     source_events = html_structure(source_text)
     target = parse_html(target_text)
+    if target.unterminated is not None:
+        raise TranslationError(
+            f"{location} contains a raw {target.unterminated[:2]!r} in text that "
+            f"could open a tag: markup {target.unterminated!r} is not closed; "
+            "write '<' as '&lt;'"
+        )
     target_events = target.events
     for position, (expected, actual) in enumerate(zip(source_events, target_events), start=1):
         if expected == actual:
