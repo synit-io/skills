@@ -142,7 +142,7 @@
     {
       "code": "no",
       "name": "Norwegian",
-      "aliases": ["norsk"],
+      "aliases": ["norsk", "nb", "nn", "Bokmål", "Nynorsk"],
       "enabled": true
     },
     {
