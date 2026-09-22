@@ -5,7 +5,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from test_m42 import STATE_ROWS, configured_profile, m42, unavailable_discovery
+from test_m42 import (
+    STATE_ROWS, configured_profile, journal_result, m42, unavailable_discovery,
+)
 
 
 def update_args(**overrides):
@@ -60,13 +62,14 @@ class ReviewTests(unittest.TestCase):
             "T(SPSActivityClassBase).TicketNumber='O''CASE17'",
         )
 
-    def test_pagination_rejects_repeated_full_page(self):
+    def test_pagination_keeps_partial_rows_when_server_repeats_full_page(self):
         client = m42.Client("https://example.com", "token")
         page = [{"ID": "one"}, {"ID": "two"}]
         with mock.patch.object(client, "request", side_effect=[page, page]) as request:
-            with self.assertRaisesRegex(m42.M42Error, "pagination.*progress"):
-                client.fragments("Example", page_size=2, max_records=10)
+            rows = client.fragments("Example", page_size=2, max_records=10)
         self.assertEqual(request.call_count, 2)
+        self.assertEqual([row["ID"] for row in rows], ["one", "two"])
+        self.assertTrue(rows.truncated)
 
     def test_pagination_preserves_overlap_and_final_short_page(self):
         client = m42.Client("https://example.com", "token")
@@ -77,6 +80,7 @@ class ReviewTests(unittest.TestCase):
         ]):
             rows = client.fragments("Example", page_size=2, max_records=10)
         self.assertEqual([row["ID"] for row in rows], ["one", "two", "three", "four"])
+        self.assertFalse(rows.truncated)
 
     def test_state_inventory_reused_only_within_client_and_group(self):
         client = m42.Client("https://example.com", "token", configured_profile())
@@ -125,14 +129,18 @@ class ReviewTests(unittest.TestCase):
 
     def test_update_combines_activity_fields_and_explicit_recipient(self):
         client = m42.Client("https://example.com", "token", configured_profile())
+        common_rows = [
+            {"CID": "common", "State": 200, "TimeStamp": "t"},
+            {"CID": "common", "State": 202, "TimeStamp": "t2"},
+        ]
         with mock.patch.object(m42, "load_client", return_value=client), \
                 mock.patch.object(client, "fragments", return_value=STATE_ROWS), \
                 mock.patch.object(client, "single", return_value={"ID": "act", "TimeStamp": "t"}), \
-                mock.patch.object(m42, "_ticket_common_fragment", return_value={"CID": "common", "State": 200, "TimeStamp": "t"}), \
+                mock.patch.object(m42, "_ticket_common_fragment", side_effect=common_rows), \
                 mock.patch.object(m42, "_resolve_user_arg", return_value="selected-user"), \
                 mock.patch.object(m42, "_current_identity") as identity, \
                 mock.patch.object(m42, "_fragment_put") as write, \
-                mock.patch.object(m42, "_gui_journal_entry", return_value="journal"), \
+                mock.patch.object(m42, "_gui_journal_entry", return_value=journal_result()), \
                 contextlib.redirect_stdout(io.StringIO()) as stdout:
             m42.cmd_update_ticket(update_args(
                 state="in_progress", subject="Changed", urgency="medium", priority=0,

@@ -14,7 +14,15 @@ https://<host>/m42Services
 
 It exchanges a long-lived API token for a short-lived access token with
 `POST /api/ApiToken/GenerateAccessTokenFromApiToken/`, then sends the returned
-token as `Authorization: Bearer <token>`. Remote HTTP is rejected.
+token as `Authorization: Bearer <token>`. Remote HTTP is rejected. Every
+request goes through one opener whose redirect handler follows a redirect only
+when it stays on the same HTTPS origin (scheme, host, port); any other redirect
+fails with an M42Error, because urllib would otherwise forward the
+`Authorization` header to the new host.
+
+Credentials and the reviewed profile live in the config file resolved by
+`resolve_config_path()` (see `references/setup.md`: `M42_CONFIG_PATH`, then the
+legacy file next to the script if present, then `$XDG_CONFIG_HOME/m42sd/`).
 
 Use a dedicated Matrix42 Person with least privilege. Operation audience and CI
 or Data Definition permissions are separate gates. The setup token needs read
@@ -28,8 +36,20 @@ only their specific write surfaces.
 - Journal entries: `SPSActivityClassUnitOfWork`
 - Users and accounts: `SPSUserClassBase`, `SPSAccountClassBase`
 - Service Desk roles: `SPSSecurityClassRole` joined to `SPSScRoleClassBase`
-- Time tracking: `SPSActivityClassTimeTracking`
+- Time tracking: `SPSActivityClassTimeTracking`, configuration in
+  `SPSGlobalConfigurationClassTimeTracking`, activity types in
+  `SVMActivityPickupActivityType`
 - Categories: `SPSScCategoryClassBase`
+- Knowledge base articles: `SVMKBArticleClassBase` (`search-kb`, `--kb`)
+- Announcements: `SVMAnnouncementClassBase`
+- Changes: `SVMActivityClassChange`
+- Attachments: `SPSActivityClassAttachment` (metadata only)
+- Catalog services (articles): `SPSArticleClassBase` (`list-services`)
+- Assets assigned to a person: `SPSAssetClassBase` (`user-data`)
+
+Data-definition names that come from user input (`list-pickup --dd`) and CI
+names read from fragment metadata are validated against
+`^[A-Za-z][A-Za-z0-9_]*$` before they are placed in a URL path.
 
 Main endpoints:
 
@@ -77,7 +97,10 @@ re-read live pickup rows and reject a configured value that disappeared.
 
 `journal_actions` maps operation semantics to live journal template values. A
 `null` mapping deliberately uses the plain-comment template and explicit audit
-text. It does not guess a native action value.
+text. It does not guess a native action value. The optional `state_change`
+action covers `update-ticket --state` transitions that have no dedicated
+action (`takeover`, `pause`, `resume`, `solved`); setup does not require an
+answer for it. Audit texts are English regardless of `comment_language_mode`.
 
 Ticket prefixes map to `incident`, `service_request`, `ticket`, `task`, or
 `problem`. Explicit `null` disables family-dependent operations for unsupported
@@ -119,12 +142,34 @@ subject, urgency, priority, category, recipient, and reminder date in one activi
 fragment update. An explicit recipient takes precedence over automatic assignment.
 Only successful writes appear in `applied`; state and activity remain separate
 operations, so an API failure can still produce a reported partial update.
+`--priority` is only range-checked (0..99): the API exposes no priority
+inventory to validate against. GUIDs passed for users and categories are
+verified to exist before they are written.
+
+Every state write outside the close endpoint (`update-ticket`,
+`forward-ticket`, `reopen-ticket`, and the close fallback) is read back through
+the common fragment. Some tenants answer permission failures with HTTP 200 and
+a null body, so a PUT that returned normally proves nothing. A readback that
+does not show the requested state fails with "verification failed" and no
+journal or audit entry claiming the transition is written. The `add-comment`
+fill is read back the same way.
+
+Optimistic concurrency: `get-ticket` reports the common fragment `TimeStamp`
+as `timestamp`. When a mutating command receives `--expected-timestamp`, it
+compares that value with the current one before any write and stops with
+"ticket changed since it was read" on mismatch. Without the flag the CLI still
+fetches a fresh `TimeStamp` right before each PUT, which only detects
+concurrent edits within that instant.
 
 Numeric state input and semantic state input are both checked against the live
 state inventory. Configured semantic aliases take precedence over conflicting
-live display names; numeric values can select an exact live state. Localized names
-are not embedded in code. State rows are cached per client and selected group for
-one CLI invocation; the next invocation fetches a fresh inventory.
+live display names. A numeric value or live display name is accepted only when
+it maps to one of the reviewed profile states, unless `--allow-unreviewed-state`
+is given; a closed state is never accepted through `update-ticket`. Localized
+names are not embedded in code. `State` read from the common fragment is
+normalized to an integer so `"204"` and `204` compare equal. State rows are
+cached per client and selected group for one CLI invocation; the next
+invocation fetches a fresh inventory.
 
 ## Journal writing
 
@@ -141,7 +186,15 @@ PUT /api/data/fragments/SPSActivityClassUnitOfWork
 `TypeId` and `ObjectId` must come from an existing journal entry owned by the
 target ticket. `UsedInType` is instance-specific; a pair from another ticket can
 link the new entry to the wrong object. The CLI verifies ownership before filling
-the shell. If fill fails, it reports the empty journal ID for explicit cleanup.
+the shell and reads the filled entry back. If the fill fails or cannot be
+verified, it reports the journal ID for explicit cleanup. Audit helpers return
+`{"id", "filled", "error"}`; command output exposes `journal_entry` (the ID or
+null) and `journal_warning`.
+
+`delete-journal` without `--force` deletes only an entry whose text is empty
+and whose `ActivityAction` is unset or `0` (plain comment). Entries created
+from native or mapped templates carry a nonzero `ActivityAction` and need
+`--force` even when they have no text.
 
 When the primary path is unavailable before shell creation, the CLI can fall back
 to whole-object read/update and append a journal fragment. That path needs
@@ -164,15 +217,31 @@ operator-approved close-reason value. Problems use the problem close endpoint;
 other supported families use the ticket close endpoint.
 The reason is validated before any work-time row is created.
 
+`--kb` must be the KB article GUID; it is sent as `KBArticle`.
+`--notify-initiator` sets `SendMailToInitiator`, so the `Comments` text may be
+mailed to the requester by the server.
+
 After an endpoint response, the CLI verifies that live state equals the reviewed
 closed state. If the endpoint rejects closure or returns success without changing
-state, the command stops unless setup explicitly allowed state-close fallback for
-that family. An allowed fallback applies configured pre-close state, if any, then
-configured closed state and reason. No family receives a pre-close transition,
-processed entry, automatic recipient, or fallback unless setup enabled it.
-The fallback must read back a closed state before writing the final close journal
-entry or reporting success. Failed verification includes recorded work-time data
-so retries can account for already-applied work.
+state, the CLI re-reads the common fragment first: a ticket that already reads
+back as closed (for example after a timeout on a close that did go through) is
+treated as success, only the close journal entry is written, and the output
+`note` says how this was detected. Otherwise the command stops unless setup
+explicitly allowed state-close fallback for that family. An allowed fallback
+applies configured pre-close state, if any, then configured closed state and
+reason, each with a fresh `TimeStamp` and a verified readback. No family
+receives a pre-close transition, processed entry, automatic recipient, or
+fallback unless setup enabled it.
+
+Work time is booked before the close request. Every failure after that point,
+including timeouts, rejected fallbacks, verification failures, and unexpected
+exceptions, reports `work_minutes`, `work_time_entry`, `work_time_recorded`,
+and a `retry_hint` saying the time is already recorded. A retry must pass
+`--work-minutes 0` after inspecting the ticket; the CLI never books the time
+twice on its own. Time is booked to the token identity (`User` = the API
+token's `UserFragmentId`), not to the human operator, and one close accepts at
+most 1440 minutes. Automatic recipient assignment failures after a successful
+transition are reported as `auto_recipient_warning` instead of being ignored.
 
 Close audit entries use the configured journal template for `close` or
 `close_task`; `null` uses explicit plain text. When `close_task` maps to a native
@@ -198,15 +267,27 @@ behavior. The CLI uses these defensive checks without treating observations as
 tenant defaults:
 
 - normalize `/m42Services` exactly once;
-- retry once after access-token expiry;
-- page and deduplicate fragment lists, stopping with an error if a full page adds
-  no new IDs rather than repeatedly reading a server that ignores pagination;
+- refuse redirects that leave the configured HTTPS origin;
+- map DNS failures, timeouts, connection errors, and non-JSON bodies to
+  M42Error; refresh the access token once after a 401 on any method; retry only
+  idempotent GETs, with bounded backoff, on 429/502/503/504 and timeouts (a
+  POST, PUT, or DELETE is never retried because it may already have applied);
+- page and deduplicate fragment lists; when a full page adds no new IDs (the
+  server ignores `pageNumber`) or the row limit is reached on a full page, the
+  rows collected so far are returned and the command output carries
+  `"truncated": true`; `--max` is capped at 10,000 and the page size never
+  exceeds the requested limit;
 - verify create results, with subject/date readback only when returned object ID
   cannot be confirmed;
 - try ticket-class ASQL navigation for journal ownership, with object-expression
   fallback where supported;
-- verify state, journal ownership, and time-tracking ownership after mutations;
-- surface HTTP-success/null responses as failed verification, not success.
+- verify state, journal ownership and fill, and time-tracking ownership after
+  mutations;
+- surface HTTP-success/null responses as failed verification, not success;
+- run the `[Expression-ObjectID]` journal fallback when the T() query errors as
+  well as when it is empty (the ID it filters on is unverified against a live
+  tenant and left as is);
+- return `Description` and journal `text` with HTML entities decoded.
 
 ## ASQL reminders
 

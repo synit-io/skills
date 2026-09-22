@@ -30,7 +30,8 @@
     "reopen": null,
     "resume": null,
     "close_task": null,
-    "solved": null
+    "solved": null,
+    "state_change": null
   },
   "ticket_prefixes": {
     "<LIVE_PREFIX>": "<incident|service_request|ticket|task|problem>",

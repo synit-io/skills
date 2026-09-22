@@ -1,4 +1,10 @@
-"""Opt-in live tests; ordinary discovery never contacts Matrix42.
+"""Opt-in live tests against a real tenant.
+
+This file deliberately does not match the default unittest discovery pattern
+(test_*.py), so `python3 -m unittest discover -s tests` never contacts
+Matrix42. Run it explicitly:
+
+    M42_LIVE_TICKET=<ticket> python3 -m unittest discover -s tests -p "live_*.py" -v
 
 Set M42_LIVE_TICKET to an operator-authorized test ticket for read checks.
 Also set M42_LIVE_WRITE=internal-comment to add exactly one internal test note.
@@ -18,7 +24,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from test_m42 import SCRIPT, m42
+from unittest import mock
+
+from test_m42 import _CONFIG_GUARD, _ENV_GUARD, _NETWORK_GUARD, SCRIPT, m42
+
+# The unit-test module blocks network calls and hides the real config; live
+# tests need both.
+_NETWORK_GUARD.stop()
+_CONFIG_GUARD.stop()
+_ENV_GUARD.stop()
 
 
 @unittest.skipUnless(os.environ.get("M42_LIVE_TICKET"), "live ticket not selected")
@@ -26,7 +40,7 @@ class LiveTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = m42.load_client()
-        cls.ticket_number, _ = m42.parse_ticket_number(os.environ["M42_LIVE_TICKET"])
+        cls.ticket_number = m42.parse_ticket_number(os.environ["M42_LIVE_TICKET"])
 
     def cli(self, *args):
         result = subprocess.run(
@@ -59,13 +73,13 @@ class LiveTests(unittest.TestCase):
         }), flush=True)
 
     def test_setup_discovery_preserves_config(self):
-        path = Path(m42.CONFIG_PATH)
+        path = Path(m42.resolve_config_path())
         before = hashlib.sha256(path.read_bytes()).digest() if path.exists() else None
         output = io.StringIO()
-        with contextlib.redirect_stdout(output):
+        with contextlib.redirect_stdout(output), \
+                mock.patch.dict(os.environ, {"M42_API_TOKEN": self.client.api_token}):
             m42.cmd_setup(SimpleNamespace(
-                base_url=self.client.base_url, token=self.client.api_token,
-                profile_file=None, verify=False,
+                base_url=self.client.base_url, token=None, profile_file=None,
             ))
         payload = json.loads(output.getvalue())
         self.assertTrue(payload["ok"])

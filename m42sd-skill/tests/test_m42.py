@@ -18,6 +18,41 @@ SPEC = importlib.util.spec_from_file_location("m42_under_test", SCRIPT)
 m42 = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(m42)
 
+
+def _no_network(req, timeout=None):
+    raise AssertionError(f"unit test attempted a network call: {req.full_url}")
+
+
+# Unit tests never contact a tenant: every transport call must be mocked.
+_NETWORK_GUARD = mock.patch.object(m42._OPENER, "open", _no_network)
+_NETWORK_GUARD.start()
+
+# Unit tests never read the operator's real config: the legacy path next to the
+# script is redirected to a nonexistent file and no default M42_CONFIG_PATH is
+# inherited from the shell. Tests that need a config point M42_CONFIG_PATH at a
+# temporary file.
+_CONFIG_GUARD = mock.patch.object(
+    m42, "LEGACY_CONFIG_PATH", os.path.join(tempfile.gettempdir(), "m42sd-no-config"))
+_CONFIG_GUARD.start()
+_ENV_GUARD = mock.patch.dict(os.environ, {}, clear=False)
+_ENV_GUARD.start()
+os.environ.pop("M42_CONFIG_PATH", None)
+
+
+def journal_result(journal_id="jid", filled=True, error=None):
+    """Shape returned by m42._gui_journal_entry."""
+    return {"id": journal_id, "filled": filled, "error": error}
+
+
+def config_path_env(path):
+    """Point the CLI at a throwaway config file; never the real one."""
+    return mock.patch.dict(os.environ, {"M42_CONFIG_PATH": str(path)}, clear=False)
+
+
+def write_private(path, text):
+    path.write_text(text, encoding="utf-8")
+    path.chmod(0o600)
+
 STATE_ROWS = [
     {"ID": "s1", "Value": 200, "DisplayString": "Neu"},
     {"ID": "s2", "Value": 201, "DisplayString": "Zugewiesen"},
@@ -131,7 +166,7 @@ class M42Tests(unittest.TestCase):
         response = mock.MagicMock()
         response.__enter__.return_value.read.return_value = b'{"RawToken":"access"}'
         with mock.patch.object(
-            m42.urllib.request, "urlopen", side_effect=[first, response]
+            m42, "_urlopen", side_effect=[first, response]
         ) as urlopen:
             self.assertEqual(client._access(), "access")
 
@@ -151,7 +186,7 @@ class M42Tests(unittest.TestCase):
         )
         with mock.patch.object(client, "_access", return_value="fresh"), \
                 mock.patch.object(
-                    m42.urllib.request, "urlopen", side_effect=[first, second]
+                    m42, "_urlopen", side_effect=[first, second]
                 ):
             with self.assertRaisesRegex(
                     m42.M42Error, "HTTP 403 on retry.*denied"):
@@ -243,6 +278,7 @@ class M42Tests(unittest.TestCase):
 
     def test_numeric_state_is_validated_against_live_pickup(self):
         client = StateClient()
+        client.tenant_profile = configured_profile()
         self.assertEqual(m42._resolve_state_value(client, "202"), 202)
         with self.assertRaisesRegex(m42.M42Error, "not in live"):
             m42._resolve_state_value(client, "999999")
@@ -289,7 +325,9 @@ class M42Tests(unittest.TestCase):
                     m42, "_journal_entry_belongs_to_ticket", return_value=False
                 ):
             result = m42._gui_journal_entry(client, "INC123", "pause")
-        self.assertIn("unfilled:", result)
+        self.assertEqual(result["id"], "33333333-3333-3333-3333-333333333333")
+        self.assertFalse(result["filled"])
+        self.assertIn("not linked", result["error"])
         self.assertEqual(client.requests, [("POST", "/api/journal/add")])
 
     def test_add_comment_without_target_pair_uses_object_update_fallback(self):
@@ -352,6 +390,8 @@ class M42Tests(unittest.TestCase):
                 self.bodies.append(kwargs.get("body"))
                 if method == "POST":
                     return {"JournalId": "33333333-3333-3333-3333-333333333333"}
+                if method == "GET":
+                    return dict(self.bodies[1])
                 return None
 
         client = Client()
@@ -390,6 +430,8 @@ class M42Tests(unittest.TestCase):
                 self.bodies.append(kwargs.get("body"))
                 if method == "POST":
                     return {"JournalId": "33333333-3333-3333-3333-333333333333"}
+                if method == "GET":
+                    return dict(self.bodies[1])
                 return None
 
         client = Client()
@@ -444,7 +486,7 @@ class M42Tests(unittest.TestCase):
                 "_gui_journal_entry",
                 side_effect=lambda *values, **kwargs: calls.append(
                     (values, kwargs)
-                ) or "jid",
+                ) or journal_result(),
             ),
         )
         with contextlib.ExitStack() as stack:
@@ -458,7 +500,9 @@ class M42Tests(unittest.TestCase):
         self.assertNotIn("<p>", values[3])
         self.assertNotIn("<br>", values[3])
         self.assertEqual(values[3], "Forwarded to role: Support")
-        self.assertEqual(kwargs, {"portal": 0})
+        self.assertEqual(kwargs, {
+            "portal": 0, "activity_id": "11111111-1111-1111-1111-111111111111",
+        })
         fragment_put.assert_called_once_with(
             client,
             m42.DD_ACTIVITY,
@@ -495,7 +539,10 @@ class M42Tests(unittest.TestCase):
                 mock.patch.object(
                     m42,
                     "_ticket_common_fragment",
-                    return_value={"State": 202, "CID": "c", "TimeStamp": "t"},
+                    side_effect=[
+                        {"State": 202, "CID": "c", "TimeStamp": "t"},
+                        {"State": 203, "CID": "c", "TimeStamp": "t2"},
+                    ],
                 ), \
                 mock.patch.object(m42, "_closed_state_values", return_value={204}), \
                 mock.patch.object(m42, "_resolve_state_value", return_value=203), \
@@ -510,13 +557,15 @@ class M42Tests(unittest.TestCase):
                     "_gui_journal_entry",
                     side_effect=lambda *values, **kwargs: calls.append(
                         (values, kwargs)
-                    ) or "jid",
+                    ) or journal_result(),
                 ):
             with contextlib.redirect_stdout(io.StringIO()):
                 m42.cmd_update_ticket(args)
         self.assertEqual(
             calls,
-            [((client, "INC123", "pause", None), {"portal": 0})],
+            [((client, "INC123", "pause", None),
+              {"portal": 0,
+               "activity_id": "11111111-1111-1111-1111-111111111111"})],
         )
 
     def test_unlabeled_state_update_adds_explicit_internal_journal_entry(self):
@@ -545,7 +594,10 @@ class M42Tests(unittest.TestCase):
                 mock.patch.object(
                     m42,
                     "_ticket_common_fragment",
-                    return_value={"State": 202, "CID": "c", "TimeStamp": "t"},
+                    side_effect=[
+                        {"State": 202, "CID": "c", "TimeStamp": "t"},
+                        {"State": 205, "CID": "c", "TimeStamp": "t2"},
+                    ],
                 ), \
                 mock.patch.object(m42, "_closed_state_values", return_value={204}), \
                 mock.patch.object(m42, "_resolve_state_value", return_value=205), \
@@ -563,7 +615,7 @@ class M42Tests(unittest.TestCase):
                     "_gui_journal_entry",
                     side_effect=lambda *values, **kwargs: calls.append(
                         (values, kwargs)
-                    ) or "jid",
+                    ) or journal_result(),
                 ):
             with contextlib.redirect_stdout(io.StringIO()):
                 m42.cmd_update_ticket(args)
@@ -571,7 +623,8 @@ class M42Tests(unittest.TestCase):
         self.assertEqual(
             calls,
             [((client, "INC123", "state_change", "State changed to planned."),
-              {"portal": 0})],
+              {"portal": 0,
+               "activity_id": "11111111-1111-1111-1111-111111111111"})],
         )
 
     def test_delete_journal_rejects_entry_owned_by_another_ticket(self):
@@ -579,10 +632,9 @@ class M42Tests(unittest.TestCase):
             def __init__(self):
                 self.requests = []
 
-            def fragments(self, *args, **kwargs):
-                return []
-
-            def single(self, *args, **kwargs):
+            def single(self, dd, where, **kwargs):
+                if "TicketNumber" in where:
+                    return None  # not owned by the named ticket
                 return {"ID": "22222222-2222-2222-2222-222222222222"}
 
             def request(self, *args, **kwargs):
@@ -609,12 +661,12 @@ class M42Tests(unittest.TestCase):
             path.chmod(0o644)
             profile_path.write_text(json.dumps(TEST_PROFILE), encoding="utf-8")
             args = SimpleNamespace(
-                token="a.e30.x",
+                token=None,
                 base_url="https://example.com",
                 profile_file=str(profile_path),
-                verify=False,
             )
-            with mock.patch.object(m42, "CONFIG_PATH", str(path)), \
+            with config_path_env(path), \
+                    mock.patch.dict(os.environ, {"M42_API_TOKEN": "a.e30.x"}), \
                     mock.patch.object(m42.Client, "_access", return_value="access"), \
                     mock.patch.object(
                         m42, "_discover_tenant", return_value=unavailable_discovery()
@@ -634,13 +686,13 @@ class M42Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m42_config.json"
             args = SimpleNamespace(
-                token="a.e30.x",
+                token=None,
                 base_url="https://example.com",
                 profile_file=None,
-                verify=False,
             )
             stdout = io.StringIO()
-            with mock.patch.object(m42, "CONFIG_PATH", str(path)), \
+            with config_path_env(path), \
+                    mock.patch.dict(os.environ, {"M42_API_TOKEN": "a.e30.x"}), \
                     mock.patch.object(m42.Client, "_access", return_value="access"), \
                     mock.patch.object(
                         m42, "_discover_tenant", return_value=unavailable_discovery()
@@ -708,14 +760,14 @@ class M42Tests(unittest.TestCase):
     def test_tenant_config_never_outputs_api_token(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m42_config.json"
-            path.write_text(json.dumps({
+            write_private(path, json.dumps({
                 "base_url": "https://example.com/m42Services",
                 "api_token": "secret-token-value",
                 "tenant_profile": TEST_PROFILE,
                 "tenant_review": {"reviewed_at": "2026-01-01T00:00:00Z"},
-            }), encoding="utf-8")
+            }))
             stdout = io.StringIO()
-            with mock.patch.object(m42, "CONFIG_PATH", str(path)), \
+            with config_path_env(path), \
                     mock.patch.dict(
                         os.environ,
                         {"M42_BASE_URL": "", "M42_API_TOKEN": "",
@@ -733,12 +785,12 @@ class M42Tests(unittest.TestCase):
     def test_environment_tenant_does_not_reuse_stored_tenant_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "m42_config.json"
-            path.write_text(json.dumps({
+            write_private(path, json.dumps({
                 "base_url": "https://tenant-one.example.com/m42Services",
                 "api_token": "stored-token",
                 "tenant_profile": TEST_PROFILE,
-            }), encoding="utf-8")
-            with mock.patch.object(m42, "CONFIG_PATH", str(path)), \
+            }))
+            with config_path_env(path), \
                     mock.patch.dict(os.environ, {
                         "M42_BASE_URL": "https://tenant-two.example.com",
                         "M42_API_TOKEN": "other-token",
@@ -768,7 +820,10 @@ class M42Tests(unittest.TestCase):
                 mock.patch.object(
                     m42,
                     "_ticket_common_fragment",
-                    return_value={"State": 204, "CID": "c", "TimeStamp": "t"},
+                    side_effect=[
+                        {"State": 204, "CID": "c", "TimeStamp": "t"},
+                        {"State": 202, "CID": "c", "TimeStamp": "t2"},
+                    ],
                 ), \
                 mock.patch.object(m42, "_closed_state_values", return_value={204}), \
                 mock.patch.object(m42, "_resolve_semantic_state", return_value=202), \
@@ -778,12 +833,14 @@ class M42Tests(unittest.TestCase):
                     "_gui_journal_entry",
                     side_effect=lambda *values, **kwargs: journal_calls.append(
                         (values, kwargs)
-                    ) or "jid",
+                    ) or journal_result(),
                 ):
             with contextlib.redirect_stdout(io.StringIO()):
                 m42.cmd_reopen_ticket(args)
         self.assertEqual(journal_calls[0][0][3], "<script>alert(1)</script>")
-        self.assertEqual(journal_calls[0][1], {"portal": 0})
+        self.assertEqual(journal_calls[0][1], {
+            "portal": 0, "activity_id": "11111111-1111-1111-1111-111111111111",
+        })
 
     def test_close_uses_profile_reason_and_live_closed_state(self):
         class Client:
@@ -816,8 +873,8 @@ class M42Tests(unittest.TestCase):
             no_auto_recipient=True,
             work_minutes=15,
         )
-        processed_entry = mock.Mock(return_value="processed-jid")
-        close_entry = mock.Mock(return_value="closed-jid")
+        processed_entry = mock.Mock(return_value=journal_result("processed-jid"))
+        close_entry = mock.Mock(return_value=journal_result("closed-jid"))
         work_entry = mock.Mock(return_value="work-jid")
         with mock.patch.object(m42, "load_client", return_value=client), \
                 mock.patch.object(
@@ -842,11 +899,13 @@ class M42Tests(unittest.TestCase):
             client, "11111111-1111-1111-1111-111111111111", 15
         )
         processed_entry.assert_called_once_with(
-            client, "INC123", "processed", portal=0
+            client, "INC123", "processed", portal=0,
+            activity_id="11111111-1111-1111-1111-111111111111",
         )
         close_entry.assert_called_once_with(
             client, "INC123", "done", portal=0, close_reason=499,
             family="incident",
+            activity_id="11111111-1111-1111-1111-111111111111",
         )
 
     def test_task_close_fallback_skips_incident_processing_state(self):
@@ -896,7 +955,8 @@ class M42Tests(unittest.TestCase):
                     m42, "_record_close_work_time", return_value="work-jid"
                 ), \
                 mock.patch.object(
-                    m42, "_close_journal_entry", return_value="closed-jid"
+                    m42, "_close_journal_entry",
+                    return_value=journal_result("closed-jid"),
                 ), \
                 contextlib.redirect_stdout(io.StringIO()):
             m42.cmd_close_ticket(args)
@@ -1080,8 +1140,10 @@ class M42Tests(unittest.TestCase):
                     "Task summary",
                     0,
                     close_reason=402,
+                    activity_id=None,
                 ),
-                mock.call(client, "INC123", "close", "Incident summary", 0),
+                mock.call(client, "INC123", "close", "Incident summary", 0,
+                          close_reason=None, activity_id=None),
             ],
         )
 
@@ -1102,6 +1164,7 @@ class M42Tests(unittest.TestCase):
             "Task summary",
             0,
             close_reason=402,
+            activity_id=None,
         )
 
     def test_task_close_entry_includes_native_gui_reason_metadata(self):
@@ -1118,6 +1181,8 @@ class M42Tests(unittest.TestCase):
                 self.bodies.append((method, path, body))
                 if method == "POST":
                     return {"JournalId": journal_id}
+                if method == "GET":
+                    return dict(self.bodies[-2][2])
                 return None
 
         client = Client()
@@ -1135,7 +1200,7 @@ class M42Tests(unittest.TestCase):
                 close_reason=402,
             )
 
-        self.assertEqual(result, journal_id)
+        self.assertEqual(result, journal_result(journal_id))
         body = next(call[2] for call in client.bodies if call[0] == "PUT")
         self.assertEqual(body["ActivityAction"], 70)
         self.assertEqual(body["VisibleInPortal"], 0)
@@ -1160,6 +1225,8 @@ class M42Tests(unittest.TestCase):
                 self.bodies.append(body)
                 if method == "POST":
                     return {"JournalId": "33333333-3333-3333-3333-333333333333"}
+                if method == "GET":
+                    return dict(self.bodies[1])
                 return None
 
         client = Client()
@@ -1170,7 +1237,8 @@ class M42Tests(unittest.TestCase):
                 ):
             result = m42._gui_journal_entry(client, "INC123", "pause")
 
-        self.assertEqual(result, "33333333-3333-3333-3333-333333333333")
+        self.assertEqual(
+            result, journal_result("33333333-3333-3333-3333-333333333333"))
         self.assertEqual(client.bodies[1]["ActivityAction"], 5)
         self.assertEqual(client.bodies[1]["VisibleInPortal"], 0)
         self.assertNotIn("OriginalSolutionHtml", client.bodies[1])

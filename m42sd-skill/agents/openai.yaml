@@ -1,0 +1,4 @@
+interface:
+  display_name: "Matrix42 Service Desk"
+  short_description: "Operate Matrix42 ESM tickets through m42Services"
+  default_prompt: "Use $m42sd-skill to work on Matrix42 service desk tickets."
