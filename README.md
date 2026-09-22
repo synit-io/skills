@@ -1,7 +1,7 @@
 # synit.io - Agent Skill Collection
 
 [![skills.sh](https://skills.sh/b/synit-io/skills)](https://skills.sh/synit-io/skills)
-[![License: MIT + SRL-1.1](https://img.shields.io/badge/license-MIT%20%2B%20SRL--1.1-blue.svg)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
 A collection of agent skills created and maintained by [synit.io](https://synit.io).
 Each skill packages instructions, scripts, and reference material that let an AI
@@ -39,9 +39,9 @@ each other; install only the ones you need.
 
 | Skill | Description |
 | --- | --- |
-| [docker-agent-builder](docker-agent-builder/) | Create, edit, migrate, repair, review, and validate Docker Agent YAML. Includes current-schema validation, semantic and secret checks, source-cache integrity checks, runtime dry-run support, and ready-to-adapt templates. |
+| [docker-agent-builder](docker-agent-builder/) | Create, edit, migrate, repair, review, and validate Docker Agent YAML. Includes current-schema validation, semantic and secret checks, source-cache corruption checks, runtime dry-run support, and ready-to-adapt templates. |
 | [m42sd-skill](m42sd-skill/) | Operate Matrix42 Enterprise Service Management through the m42Services API: ticket, journal, user, knowledge-base, and service-catalog workflows for helpdesk agents. Includes a stateless Python CLI, guided tenant setup, and safety rules for mutations such as closing or forwarding tickets. |
-| [nexthink-campaign-translator](nexthink-campaign-translator/) | Add languages to a Nexthink campaign export JSON. The agent translates question and choice text; a Python helper writes the translation overlays, keeps question IDs, `{{placeholders}}`, `href` values, and rich HTML intact, updates `multiLanguageInfo`, and repairs `INVALID` overlays. Supported languages come from a configurable allowlist. |
+| [nexthink-campaign-translator](nexthink-campaign-translator/) | Add languages to a Nexthink campaign export JSON. The agent translates question and choice text; a Python helper writes the translation overlays, verifies that question IDs, `{{placeholders}}`, and the HTML structure (tags, attributes, `href` values) match the source, updates `multiLanguageInfo`, and repairs `INVALID` overlays. Supported languages come from a configurable allowlist. |
 
 ## Installation
 
@@ -57,9 +57,10 @@ cd skills
 ```
 
 Symlinking keeps the installed skill in sync with `git pull`; copying gives you
-an isolated snapshot. Both work. Skill scripts write their local config (for
-example `m42_config.json`) next to the script, so with a symlink that file lands
-inside your clone. It is gitignored.
+an isolated snapshot. Both work. Skill scripts keep credentials and tenant
+config outside the skill folder (for example `~/.config/m42sd/m42_config.json`,
+or the path in `M42_CONFIG_PATH`), so reinstalling or updating a skill does not
+touch them.
 
 After installing, open the skill's `SKILL.md` and follow its setup section
 (credentials, tenant discovery, safety rules) before the first real task.
@@ -90,9 +91,10 @@ npx skills add synit-io/skills --list
 ```
 
 The CLI copies files rather than symlinking. Re-run the same command to pull a
-newer version. Skill config such as `m42_config.json` is written inside the
-installed copy, so back it up before reinstalling if you do not want to run
-setup again. The CLI sends anonymous install telemetry to skills.sh; set
+newer version. A `m42_config.json` created by an older `m42sd-skill` version
+lives inside the installed copy (`scripts/m42_config.json`) and is still read
+from there; move it to `~/.config/m42sd/` before reinstalling so it is not
+overwritten. The CLI sends anonymous install telemetry to skills.sh; set
 `DISABLE_TELEMETRY=1` to opt out.
 
 ### Where each harness looks
@@ -178,13 +180,14 @@ Copilot, Goose, OpenHands, and others listed at
    `<skills-dir>/<skill-name>/SKILL.md` exists.
 3. Restart or reload the harness and confirm the skill is listed.
 4. Make sure the harness can run shell commands and that `python3` is on the
-   path. Check the selected skill's README for any additional Python packages.
+   path. Check the selected skill's `SKILL.md` for any additional Python
+   packages (only `docker-agent-builder` needs some).
 
 If your harness has no skill support, paste the contents of `SKILL.md` into the
 agent's system prompt or its `AGENTS.md`, keep the `scripts/` and `references/`
 folders reachable from the working directory, and give the agent shell access.
-The instructions reference scripts by relative path, so run the agent from the
-skill directory or adjust the paths.
+The instructions reference scripts as `<skill-dir>/scripts/...`; tell the agent
+which directory `<skill-dir>` stands for.
 
 ### Updating
 
@@ -199,8 +202,10 @@ Installs made with the `skills` CLI update by re-running the same
 
 ## Security
 
-Skill scripts that need credentials store them in local config files that are
-excluded from version control. Never commit tokens, tenant profiles, or
+Skill scripts that need credentials store them in local config files with
+owner-only permissions, outside the skill folder and outside version control.
+Pass secrets through environment variables or interactive prompts, never as
+command-line arguments. Never commit tokens, tenant profiles, or
 discovery output, and never install a skill into a directory that is committed
 to a public repository together with its generated config. The same applies to
 customer data such as campaign exports and translation bundles: keep them out
@@ -213,8 +218,7 @@ update its tests, and do not include tenant-specific values or secrets.
 
 ## License
 
-Skills are released under the [MIT License](LICENSE) unless their directory
-contains a separate license. `docker-agent-builder` uses the
-[Synit Repository License v1.1](docker-agent-builder/LICENSE), a source-available
-internal-use license. Bundled upstream Docker material retains its notices
-under `docker-agent-builder/references/`.
+All skills in this repository are released under the [MIT License](LICENSE).
+Bundled upstream Docker material in `docker-agent-builder/references/` retains
+its original Apache License 2.0 text and notices
+(`THIRD_PARTY_NOTICES.md`, `docker-agent-LICENSE.txt`).

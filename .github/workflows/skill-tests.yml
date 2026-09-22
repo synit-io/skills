@@ -1,0 +1,64 @@
+name: skill-tests
+
+# Offline regression tests for the standard-library-only skills.
+# docker-agent-builder has its own workflow because it needs dependencies.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "m42sd-skill/**"
+      - "nexthink-campaign-translator/**"
+      - ".github/workflows/skill-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "m42sd-skill/**"
+      - "nexthink-campaign-translator/**"
+      - ".github/workflows/skill-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: [m42sd-skill, nexthink-campaign-translator]
+        python-version: ["3.10", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.skill }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Verify skill metadata
+        env:
+          SKILL_NAME: ${{ matrix.skill }}
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          skill = Path("SKILL.md").read_text(encoding="utf-8")
+          if not skill.startswith("---\n") or "\n---\n" not in skill[4:]:
+              raise SystemExit("SKILL.md must start with YAML front matter")
+          front_matter = skill.split("---\n", 2)[1]
+          name = re.search(r"^name:\s*(\S+)\s*$", front_matter, re.MULTILINE)
+          if not name or name.group(1) != os.environ["SKILL_NAME"]:
+              raise SystemExit("SKILL.md name must match the skill directory")
+          if not re.search(r"^description:\s*\S", front_matter, re.MULTILINE):
+              raise SystemExit("SKILL.md description is required")
+          PY
+      - name: Check Python syntax
+        run: python -m compileall -q scripts tests
+      - name: Run unit tests
+        # Live tests (tests/live_*.py) do not match the default pattern and
+        # never run here.
+        run: python -m unittest discover -s tests -v

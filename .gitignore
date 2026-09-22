@@ -9,5 +9,8 @@ work
 # Skill runtime secrets and tenant discovery output
 m42_config.json
 
-# Docker Agent official-source cache snapshot
+# Docker Agent official-source cache snapshots (written by --vendor-dir)
 docker-agent-builder/references/llms.txt
+docker-agent-builder/references/llms.meta.json
+docker-agent-builder/references/agent-schema.json
+docker-agent-builder/references/agent-schema.meta.json
