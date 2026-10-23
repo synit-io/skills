@@ -1,0 +1,4 @@
+interface:
+  display_name: "Humanize Website Content"
+  short_description: "Write clear, natural German website content"
+  default_prompt: "Use $humanize-website-content to rewrite German website copy in its page context while preserving facts and technical detail."

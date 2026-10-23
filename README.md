@@ -40,6 +40,7 @@ each other; install only the ones you need.
 | Skill | Description |
 | --- | --- |
 | [docker-agent-builder](docker-agent-builder/) | Create, edit, migrate, repair, review, and validate Docker Agent YAML. Includes current-schema validation, semantic and secret checks, source-cache corruption checks, runtime dry-run support, and ready-to-adapt templates. |
+| [humanize-website-content](humanize-website-content/) | Write and revise German website copy while preserving facts, technical detail, and page context. Includes optional SEO guidance and a read-only Python checker for stock phrases, dash characters, and repeated whitespace. |
 | [m42sd-skill](m42sd-skill/) | Operate Matrix42 Enterprise Service Management through the m42Services API: ticket, journal, user, knowledge-base, and service-catalog workflows for helpdesk agents. Includes a stateless Python CLI, guided tenant setup, and safety rules for mutations such as closing or forwarding tickets. |
 | [nexthink-campaign-translator](nexthink-campaign-translator/) | Add languages to a Nexthink campaign export JSON. The agent translates question and choice text; a Python helper writes the translation overlays, verifies that question IDs, `{{placeholders}}`, and the HTML structure (tags, attributes, `href` values) match the source, updates `multiLanguageInfo`, and repairs `INVALID` overlays. Supported languages come from a configurable allowlist. |
 
@@ -215,6 +216,25 @@ of the repository.
 
 Issues and pull requests are welcome. Keep each skill self-contained, add or
 update its tests, and do not include tenant-specific values or secrets.
+
+### Tests
+
+Run a skill's offline regression suite from the repository root:
+
+```bash
+python3 -m unittest discover -s humanize-website-content/tests -v
+```
+
+Replace `humanize-website-content` with the skill directory to test another
+skill. Only `docker-agent-builder` requires additional Python dependencies;
+install its `scripts/requirements.txt` first. Each skill's instructions document
+its relevant checks.
+
+The [shared CI workflow](.github/workflows/skill-tests.yml) checks metadata,
+Python syntax, and tests for `humanize-website-content`, `m42sd-skill`, and
+`nexthink-campaign-translator` on Python 3.10, 3.12, and 3.13.
+[`docker-agent-builder`](.github/workflows/docker-agent-builder.yml) has a
+separate workflow for its dependencies and upstream schema checks.
 
 ## License
 
