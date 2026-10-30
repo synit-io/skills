@@ -1,0 +1,18 @@
+# Fictional example only: this explicit search group preserves the exclusions.
+User-agent: *
+Disallow: /admin/
+Disallow: /account/
+Disallow: /private/
+
+User-agent: OAI-SearchBot
+Disallow: /admin/
+Disallow: /account/
+Disallow: /private/
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+Sitemap: https://example.com/sitemap.xml

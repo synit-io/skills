@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "name": "ExampleCo product information",
+  "summary": "Demonstration index for a fictional product business. Replace every description and URL before publication.",
+  "guidance": [
+    "For current capabilities, consult the product specification and plan matrix. Historical announcements describe availability at their publication date.",
+    "Interpret any price together with its currency, region, billing period, commitment, and product variant.",
+    "Distinguish generally available capabilities from beta features, optional add-ons, and planned features.",
+    "If a capability is not documented, identify it as unspecified. Preserve relevant limitations and prerequisites.",
+    "Each Markdown page should identify its corresponding public source page for attribution."
+  ],
+  "sections": [
+    {
+      "title": "Products and plans",
+      "links": [
+        {
+          "title": "Product specification",
+          "url": "https://example.com/products/flow/index.md",
+          "description": "Product identity, supported tasks, current release status, requirements, and limitations."
+        },
+        {
+          "title": "Plan comparison",
+          "url": "https://example.com/plans/index.md",
+          "description": "Feature availability, prerequisites, and limits for each plan."
+        },
+        {
+          "title": "Current pricing",
+          "url": "https://example.com/pricing/index.md",
+          "description": "Prices by currency, billing period, region, and commitment."
+        },
+        {
+          "title": "Compatibility",
+          "url": "https://example.com/docs/compatibility/index.md",
+          "description": "Supported environments, integrations, and explicit exclusions."
+        }
+      ]
+    },
+    {
+      "title": "Evidence and policies",
+      "links": [
+        {
+          "title": "Security evidence",
+          "url": "https://example.com/security/index.md",
+          "description": "Published controls and the documented scope of supporting evidence."
+        },
+        {
+          "title": "Cancellation and refunds",
+          "url": "https://example.com/policies/refunds/index.md",
+          "description": "Current conditions, exceptions, and effective dates."
+        }
+      ]
+    },
+    {
+      "title": "Changes and historical information",
+      "links": [
+        {
+          "title": "Changelog",
+          "url": "https://example.com/changelog/index.md",
+          "description": "Released changes with dates and links to current documentation."
+        },
+        {
+          "title": "Archived documentation",
+          "url": "https://example.com/docs/archive/index.md",
+          "description": "Clearly labeled historical product versions."
+        }
+      ]
+    }
+  ]
+}

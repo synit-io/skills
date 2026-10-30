@@ -1,0 +1,13 @@
+# Fictional example only: preserve the owner's actual policy.
+User-agent: *
+Disallow: /admin/
+Disallow: /account/
+Disallow: /private/
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+Sitemap: https://example.com/sitemap.xml

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reviewed llms.txt source manifest",
+  "description": "Schema for this bundle's builder, not an llms.txt industry specification. The Python validator additionally checks URLs, examples, duplicate destinations, placeholders, and real dates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name"],
+  "properties": {
+    "schema_version": {"const": 1, "type": "integer"},
+    "name": {"$ref": "#/$defs/text"},
+    "summary": {"$ref": "#/$defs/text"},
+    "reviewed_on": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Optional human-supplied review date. Never fabricate or automatically refresh it at build time."
+    },
+    "guidance": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/text"},
+      "description": "Plain-text paragraphs describing source selection and interpretation."
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "links"],
+        "properties": {
+          "title": {"$ref": "#/$defs/text"},
+          "links": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "url"],
+              "properties": {
+                "title": {"$ref": "#/$defs/text"},
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https?://",
+                  "description": "Existing reviewed HTTP(S) destination; approved external sources are allowed."
+                },
+                "description": {
+                  "type": "string",
+                  "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]+$",
+      "description": "One line of plain text, without outer whitespace or unresolved template markers. Markdown punctuation is escaped by the renderer."
+    }
+  }
+}

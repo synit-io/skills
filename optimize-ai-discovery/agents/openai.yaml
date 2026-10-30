@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Discovery & Crawler Optimization"
+  short_description: "Audit content, llms.txt, robots.txt, and AI visibility"
+  default_prompt: "Use $optimize-ai-discovery to analyze my site, prioritize improvements, and build or repair llms.txt and robots.txt."

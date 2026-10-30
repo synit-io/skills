@@ -1,0 +1,30 @@
+# ExampleCo product information
+
+> Demonstration index for a fictional product business. Replace every description and URL before publication.
+
+For current capabilities, consult the product specification and plan matrix. Historical announcements describe availability at their publication date.
+
+Interpret any price together with its currency, region, billing period, commitment, and product variant.
+
+Distinguish generally available capabilities from beta features, optional add-ons, and planned features.
+
+If a capability is not documented, identify it as unspecified. Preserve relevant limitations and prerequisites.
+
+Each Markdown page should identify its corresponding public source page for attribution.
+
+## Products and plans
+
+- [Product specification](https://example.com/products/flow/index.md): Product identity, supported tasks, current release status, requirements, and limitations.
+- [Plan comparison](https://example.com/plans/index.md): Feature availability, prerequisites, and limits for each plan.
+- [Current pricing](https://example.com/pricing/index.md): Prices by currency, billing period, region, and commitment.
+- [Compatibility](https://example.com/docs/compatibility/index.md): Supported environments, integrations, and explicit exclusions.
+
+## Evidence and policies
+
+- [Security evidence](https://example.com/security/index.md): Published controls and the documented scope of supporting evidence.
+- [Cancellation and refunds](https://example.com/policies/refunds/index.md): Current conditions, exceptions, and effective dates.
+
+## Changes and historical information
+
+- [Changelog](https://example.com/changelog/index.md): Released changes with dates and links to current documentation.
+- [Archived documentation](https://example.com/docs/archive/index.md): Clearly labeled historical product versions.
